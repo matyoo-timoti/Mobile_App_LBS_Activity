@@ -1,6 +1,7 @@
 package com.asterisk.mobileapplbsactivity;
 
 import android.Manifest;
+import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.content.Context;
 import android.content.pm.PackageManager;
@@ -11,6 +12,7 @@ import android.location.LocationListener;
 import android.location.LocationManager;
 import android.os.Bundle;
 import android.util.Log;
+import android.view.Gravity;
 import android.view.KeyEvent;
 import android.widget.Toast;
 
@@ -31,13 +33,12 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
-public class MapsActivity extends FragmentActivity implements OnMapReadyCallback {
+public class MapsActivity extends FragmentActivity implements OnMapReadyCallback, GoogleMap.OnMyLocationButtonClickListener, GoogleMap.OnMyLocationClickListener {
 
     final private int REQUEST_COURSE_ACCESS = 123;
     boolean permissionGranted = false;
 
     private GoogleMap mMap;
-    private ActivityMapsBinding binding;
 
     private LocationManager locManager;
     private LocationListener locListener;
@@ -46,29 +47,25 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        binding = ActivityMapsBinding.inflate(getLayoutInflater());
+        com.asterisk.mobileapplbsactivity.databinding.ActivityMapsBinding binding = ActivityMapsBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
 
-        // Obtain the SupportMapFragment and get notified when the map is ready to be used.
-        SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager()
-                .findFragmentById(R.id.map);
+        //---Obtain the SupportMapFragment and get notified when the map is ready to be used---
+        SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager().findFragmentById(R.id.map);
         assert mapFragment != null;
         mapFragment.getMapAsync(this);
     }
-
 
     @Override
     public void onPause() {
         super.onPause();
         //---remove the location listener---
-        if (ActivityCompat.checkSelfPermission(this,
-                android.Manifest.permission.ACCESS_FINE_LOCATION)
+        if (ActivityCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_FINE_LOCATION)
                 != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(
                 this, android.Manifest.permission.ACCESS_COARSE_LOCATION)
                 != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(this,
-                    new String[]{
-                            android.Manifest.permission.ACCESS_COARSE_LOCATION},
+                    new String[]{android.Manifest.permission.ACCESS_COARSE_LOCATION},
                     REQUEST_COURSE_ACCESS);
             return;
         } else {
@@ -79,51 +76,67 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         }
     }
 
-
+    @SuppressLint("MissingPermission")
     @Override
     public void onMapReady(@NonNull GoogleMap googleMap) {
         mMap = googleMap;
 
+        mMap.setMyLocationEnabled(true);
+        mMap.setOnMyLocationButtonClickListener(this);
+        mMap.setOnMyLocationClickListener(this);
+
         checkAndRequestPermissions();
         locManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
         locListener = new MyLocationListener();
-        if (ActivityCompat.checkSelfPermission(
-                this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED
-                && ActivityCompat.checkSelfPermission(
-                this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this, new String[]{
-                    Manifest.permission.ACCESS_COARSE_LOCATION}, REQUEST_COURSE_ACCESS);
+
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
+                != PackageManager.PERMISSION_GRANTED
+                && ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION)
+                != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_COARSE_LOCATION},
+                    REQUEST_COURSE_ACCESS);
             return;
         } else {
             permissionGranted = true;
         }
-        if (permissionGranted){
-            locManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 0, (LocationListener) locListener);
+
+        if (permissionGranted) {
+            locManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 0, locListener);
         }
 
-        // Navigating the Map to Display a Specific Location
-        //LatLng boston = new LatLng(42.3601, -71.0589);
-        //mMap.addMarker(new MarkerOptions().position(boston).title("Boston, Mass"));
-        //mMap.moveCamera(CameraUpdateFactory.newLatLng(boston));
+        //---Changing Views---
+        mMap.setMapType(GoogleMap.MAP_TYPE_HYBRID);
 
-        // Changing Views
-        /*mMap.setMapType(GoogleMap.MAP_TYPE_SATELLITE);*/
+        //---Specific Location---
+        LatLng daet = new LatLng(14.124270825549074, 122.96277767324638);
 
-        // Getting the Location That Was Touched
+        //---Add marker on map---
+        //mMap.addMarker(new MarkerOptions().position(daet).title("Daet, Camarines Norte"));
+
+        //---Start maps with Daet---
+        mMap.moveCamera(CameraUpdateFactory.newLatLng(daet));
+
+        //---Getting the Location That Was Tapped---
         mMap.setOnMapClickListener((point -> {
-        String address = getAddressFromLatLng(point);
-            Log.d("DEBUG", address);
-            Toast.makeText(getBaseContext(), address, Toast.LENGTH_SHORT).show();
+            LocationAdd loc = getAddressFromLatLng(point);
+
+            Toast.makeText(getBaseContext(),
+                    String.format("Tapped location details:%nLatitude: %s%nLongitude: %s%n%n%s", loc.getLatitude(), loc.getLongitude(), loc.Address),
+                    Toast.LENGTH_LONG).show();
+
+            Log.d("ADDRESS", loc.getAddress());
         }));
     }
 
-    private String getAddressFromLatLng(LatLng point) {
-        // Geocoder object converts the latitude and longitude into an address
+    private LocationAdd getAddressFromLatLng(LatLng point) {
+        //---Geocoder object converts the latitude and longitude into an address---
         Geocoder geoCoder = new Geocoder(getBaseContext(), Locale.getDefault());
-        String finalAddress = "";
+        String finalAddress;
 
         double latitude = point.latitude;
         double longitude = point.longitude;
+
+        LocationAdd locationAdd = null;
 
         try {
             List<Address> addresses = geoCoder.getFromLocation(latitude, longitude, 1);
@@ -137,25 +150,32 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                 }
 
                 finalAddress = strReturnedAddress.toString();
+                locationAdd = new LocationAdd(latitude, longitude, finalAddress);
+
                 Log.w("CLICKED ADDRESS: ", strReturnedAddress.toString());
-                //Toast.makeText(getBaseContext(), finalAddress, Toast.LENGTH_SHORT).show();
-                //String latLng = String.format("Location:%nLatitude: %s%nLongitude: %s", latitude, longitude);
-                //Toast.makeText(getBaseContext(), latLng, Toast.LENGTH_SHORT).show();
+
+            } else {
+                //---if you click on a ocean---
+                Toast.makeText(this, "Unknown Location", Toast.LENGTH_SHORT).show();
             }
 
         } catch (IOException e) {
             e.printStackTrace();
         }
-        return finalAddress;
+        return locationAdd;
     }
 
-    public boolean checkAndRequestPermissions() {
+    //---check and request permissions---
+    public void checkAndRequestPermissions() {
         int internet = ContextCompat.checkSelfPermission(this,
                 Manifest.permission.INTERNET);
+
         int CoarseLoc = ContextCompat.checkSelfPermission(this,
                 Manifest.permission.ACCESS_COARSE_LOCATION);
+
         int FineLoc = ContextCompat.checkSelfPermission(this,
                 Manifest.permission.ACCESS_FINE_LOCATION);
+
         List<String> listPermissionsNeeded = new ArrayList<>();
 
         if (internet != PackageManager.PERMISSION_GRANTED) {
@@ -170,13 +190,11 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         if (!listPermissionsNeeded.isEmpty()) {
             ActivityCompat.requestPermissions((Activity) getBaseContext(), listPermissionsNeeded.toArray
                     (new String[listPermissionsNeeded.size()]), 1);
-            return false;
         }
-        return true;
     }
 
     @Override
-    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         if (requestCode == REQUEST_COURSE_ACCESS) {
             permissionGranted = grantResults[0] == PackageManager.PERMISSION_GRANTED;
         } else {
@@ -197,18 +215,59 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         return super.onKeyDown(keyCode, keyEvent);
     }
 
+    @Override
+    public void onMyLocationClick(@NonNull Location loc) {
+
+        LatLng p = new LatLng(
+                (int) (loc.getLatitude()),
+                (int) (loc.getLongitude()));
+
+        String add = getAddressFromLatLng(p).getAddress();
+
+        Toast.makeText(getBaseContext(),
+                String.format("Current location details:%nLatitude: %s%nLongitude: %s%n%n%s", loc.getLatitude(), loc.getLongitude(), add),
+                Toast.LENGTH_LONG).show();
+
+        //---Zoom in the current position---
+        //mMap.moveCamera(CameraUpdateFactory.newLatLng(p);
+        mMap.animateCamera(CameraUpdateFactory.zoomTo(20));
+                 /*
+                 ---Zoom Levels---
+                 1: World
+                 5: Landmass/continent
+                 10: City
+                 15: Streets
+                 20: Buildings
+                 */
+    }
+
+    @Override
+    public boolean onMyLocationButtonClick() {
+        Toast.makeText(this, "Moving to current location", Toast.LENGTH_SHORT)
+                .show();
+        // Return false so that we don't consume the event and the default behavior still occurs
+        // (the camera animates to the user's current position).
+        return false;
+    }
+
     private class MyLocationListener implements LocationListener {
         public void onLocationChanged(Location loc) {
             if (loc != null) {
+
                 LatLng p = new LatLng(
                         (int) (loc.getLatitude()),
                         (int) (loc.getLongitude()));
-                String add = getAddressFromLatLng(p);
-                Toast.makeText(getBaseContext(),
-                        String.format("Location update:%nLatitude: %s%nLongitude: %s%n%n%s", loc.getLatitude(), loc.getLongitude(), add),
-                        Toast.LENGTH_LONG).show();
-                mMap.moveCamera(CameraUpdateFactory.newLatLng(p));
-                mMap.animateCamera(CameraUpdateFactory.zoomTo(7));
+
+                String add = getAddressFromLatLng(p).getAddress();
+
+                //---Display a toast containing coordinates and address of current location---
+                Toast toast = Toast.makeText(getBaseContext(),
+                        String.format("Current location update:%nLatitude: %s%nLongitude: %s%n%n%s", loc.getLatitude(), loc.getLongitude(), add),
+                        Toast.LENGTH_LONG);
+
+                toast.setGravity(Gravity.TOP | Gravity.CENTER_HORIZONTAL, 0, 20);
+                toast.show();
+
             }
         }
 
@@ -221,5 +280,32 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         public void onStatusChanged(String provider, int status,
                                     Bundle extras) {
         }
+    }
+
+    //---Location Address---
+    private static class LocationAdd {
+        public double latitude;
+        public double longitude;
+        public String Address;
+
+        public LocationAdd(double latitude, double longitude, String address) {
+            this.latitude = latitude;
+            this.longitude = longitude;
+            this.Address = address;
+        }
+
+        public double getLatitude() {
+            return latitude;
+        }
+
+        public double getLongitude() {
+            return longitude;
+        }
+
+        public String getAddress() {
+            return Address;
+        }
+
+
     }
 }
